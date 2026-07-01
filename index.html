@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Fichamento</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #e5e7eb; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        #pdf-root { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px; }
+        .a4-page { width: 210mm; min-height: 296mm; max-height: 296mm; padding: 6mm; background: #fff; box-shadow: 0 10px 25px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; page-break-inside: avoid; page-break-after: always; display: block; flex-shrink: 0; }
+        .a4-page:last-child { page-break-after: auto; }
+        body.exporting #pdf-root { gap: 0 !important; padding: 0 !important; align-items: flex-start !important; }
+        body.exporting .a4-page { box-shadow: none !important; margin: 0 !important; border: none !important; border-radius: 0 !important; }
+        .page-header { width: 100%; margin-bottom: 5mm; display: block; }
+        .header-main { display: flex; justify-content: space-between; align-items: stretch; height: 35mm; gap: 4mm; width: 100%; }
+        .header-text-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-family: Arial, sans-serif; text-transform: uppercase; overflow: hidden; padding: 2mm 0; }
+        .header-text-area div { width: 100%; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .photo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4mm; width: 100%; align-content: start; }
+        .student-card { display: flex; flex-direction: column; align-items: center; width: 100%; overflow: hidden; position: relative; }
+        .student-name { font-family: Arial, sans-serif; font-size: 11px; text-align: center; margin-top: 2px; width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow: hidden; font-weight: 600; line-height: 1.2; height: 28px; }
+        .page-footer { position: absolute; bottom: 6mm; right: 6mm; text-align: right; font-size: 10px; font-family: Arial, sans-serif; color: #333; }
+        .student-actions { position: absolute; top: 0; right: 0; background: rgba(255, 255, 255, 0.95); border: 1px solid #ccc; border-top: none; border-right: none; border-radius: 0 0 0 4px; display: none; gap: 4px; padding: 2px 4px; box-shadow: -1px 1px 3px rgba(0,0,0,0.1); }
+        .student-card:hover .student-actions { display: flex; }
+        body.exporting .student-actions { display: none !important; }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px; transition: transform 0.1s; }
+        .action-btn:hover { transform: scale(1.15); }
+        .html2pdf__container { box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #16a34a; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex h-screen text-gray-800">
+    <aside class="w-1/3 min-w-[350px] max-w-[450px] bg-white border-r border-gray-200 flex flex-col h-full shadow-lg z-10">
+        <div class="p-5 border-b border-gray-100 bg-orange-50">
+            <h1 class="text-xl font-bold text-orange-800 flex items-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Fichamento Pro
+            </h1>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-5 space-y-5">
+            <section class="space-y-3">
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider">1. Imagens do Cabeçalho</h2>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-semibold">Logo do Topo</label>
+                        <button id="btn-rm-topo" class="hidden text-[10px] text-red-500 hover:text-red-700 font-bold">Remover</button>
+                    </div>
+                    <input type="file" id="input-logo-topo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer border border-gray-200 rounded-md">
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold">Foto Esquerda</label>
+                            <button id="btn-rm-esq" class="hidden text-[10px] text-red-500 hover:text-red-700 font-bold">Remover</button>
+                        </div>
+                        <input type="file" id="input-foto-esq" accept="image/*" class="w-full text-sm text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer border border-gray-200 rounded-md">
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold">Foto Direita</label>
+                            <button id="btn-rm-dir" class="hidden text-[10px] text-red-500 hover:text-red-700 font-bold">Remover</button>
+                        </div>
+                        <input type="file" id="input-foto-dir" accept="image/*" class="w-full text-sm text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer border border-gray-200 rounded-md">
+                    </div>
+                </div>
+            </section>
+            
+            <hr class="border-gray-100">
+            
+            <section class="space-y-3">
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider">2. Dados da Escola</h2>
+                <input type="text" id="linha1" maxlength="45" placeholder="Linha 1 (Ex: Nome da Escola)" class="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                <input type="text" id="linha2" maxlength="45" placeholder="Linha 2 (Ex: CNPJ / Endereço)" class="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                <input type="text" id="linha3" maxlength="45" placeholder="Turma (Ex: 3º Ano A)" class="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:outline-none border-l-4 border-l-orange-500">
+                <input type="text" id="linha4" maxlength="45" placeholder="Linha 4 (Ex: Professor Responsável)" class="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                <input type="text" id="linha5" maxlength="45" placeholder="Linha 5 (Informação adicional)" class="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:outline-none">
+            </section>
+            
+            <hr class="border-gray-100">
+            
+            <section class="space-y-3">
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider flex justify-between items-center">
+                    3. Lote de Fotos
+                    <div class="flex items-center gap-2">
+                        <button id="btn-limpar-fotos" class="hidden text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Limpar</button>
+                        <span id="badge-alunos" class="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-bold hidden">0 alunos</span>
+                    </div>
+                </h2>
+                <div class="border-2 border-dashed border-orange-300 bg-orange-50 rounded-lg p-5 text-center hover:bg-orange-100 transition-colors relative">
+                    <input type="file" id="input-lote-fotos" multiple accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <svg class="mx-auto h-6 w-6 text-orange-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <p class="text-sm font-semibold text-orange-800">Clique ou arraste as fotos aqui</p>
+                </div>
+            </section>
+            
+            <hr class="border-gray-100">
+            
+            <section class="space-y-3">
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider">4. Exportação</h2>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mb-3">
+                    <input type="checkbox" id="toggle-obs" class="w-4 h-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded">
+                    <span>Incluir página de observações</span>
+                </label>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Nome do Arquivo Gerado</label>
+                    <div class="flex items-center border border-gray-300 rounded-md overflow-hidden focus-within:border-green-500 focus-within:ring-1 focus-within:ring-green-500 bg-white">
+                        <div class="bg-gray-100 px-3 py-2 flex items-center justify-center border-r border-gray-200">
+                            <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <input type="text" id="input-filename" placeholder="turma_3ano" class="flex-1 p-2 text-sm outline-none w-full font-medium text-gray-700">
+                        <div class="bg-gray-50 px-3 py-2 text-xs text-gray-600 font-bold border-l border-gray-200 select-none">.pdf</div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <div class="p-5 border-t border-gray-200 bg-white">
+            <button id="btn-exportar" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition-transform transform active:scale-95 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span id="txt-btn-exportar">Baixar PDF</span>
+            </button>
+        </div>
+    </aside>
+    
+    <main class="flex-1 h-full overflow-y-auto relative bg-gray-200">
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none z-10">
+            <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <p class="font-medium text-lg">Prévia do documento</p>
+        </div>
+        <div id="pdf-root"></div>
+    </main>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        const S = { imgs: { top: null, left: null, right: null }, txts: { l1: '', l2: '', l3: '', l4: '', l5: '' }, studs: [], obs: false };
+        const LN = 20;
+
+        const g = id => document.getElementById(id);
+        const D = {
+            inTxt: ['linha1', 'linha2', 'linha3', 'linha4', 'linha5'].map(g),
+            inTop: g('input-logo-topo'),
+            inL: g('input-foto-esq'),
+            inR: g('input-foto-dir'),
+            inBat: g('input-lote-fotos'),
+            inName: g('input-filename'),
+            bRmTop: g('btn-rm-topo'),
+            bRmL: g('btn-rm-esq'),
+            bRmR: g('btn-rm-dir'),
+            tObs: g('toggle-obs'),
+            bLimpar: g('btn-limpar-fotos'),
+            root: g('pdf-root'),
+            empty: g('empty-state'),
+            badge: g('badge-alunos'),
+            bExp: g('btn-exportar'),
+            tExp: g('txt-btn-exportar')
+        };
+
+        const fmtName = n => n.substring(0, n.lastIndexOf('.')).replace(/[_-]/g, ' ').trim();
+
+        const updLote = () => {
+            D.badge.textContent = `${S.studs.length} alunos`;
+            let has = S.studs.length > 0;
+            D.badge.classList.toggle('hidden', !has);
+            D.bLimpar.classList.toggle('hidden', !has);
+        };
+
+        const renStud = i => {
+            let n = prompt("Novo nome:", S.studs[i].name);
+            if (n && n.trim() && n.trim() !== S.studs[i].name) {
+                S.studs[i].name = n.trim();
+                S.studs.sort((a, b) => a.name.localeCompare(b.name));
+                render();
+                if (n.trim().length > 35) setTimeout(() => alert("Nome longo."), 200);
+            }
+        };
+
+        const rmStud = i => {
+            if (confirm(`Remover "${S.studs[i].name}"?`)) {
+                S.studs.splice(i, 1);
+                updLote();
+                render();
+            }
+        };
+
+        D.root.addEventListener('click', e => {
+            let rn = e.target.closest('.btn-rename');
+            let rm = e.target.closest('.btn-remove');
+            if (rn) renStud(parseInt(rn.dataset.index, 10));
+            else if (rm) rmStud(parseInt(rm.dataset.index, 10));
+        });
+
+        D.bLimpar.addEventListener('click', () => {
+            if (confirm("Apagar todas?")) {
+                S.studs = [];
+                D.inBat.value = '';
+                updLote();
+                render();
+            }
+        });
+
+        D.inTxt.forEach((el, i) => el.addEventListener('input', e => {
+            S.txts[`l${i + 1}`] = e.target.value;
+            render();
+        }));
+
+        const pImg = (f, cvr) => new Promise((r, j) => {
+            let rd = new FileReader();
+            rd.onload = e => {
+                let i = new Image();
+                i.onload = () => {
+                    let cv = document.createElement('canvas');
+                    let cx = cv.getContext('2d');
+                    let w = i.width;
+                    let h = i.height;
+                    if (cvr) {
+                        let tr = 36.4 / 48;
+                        let sx = 0, sy = 0;
+                        let ir = w / h;
+                        if (ir > tr) {
+                            let nw = h * tr;
+                            sx = (w - nw) / 2;
+                            w = nw;
+                        } else {
+                            let nh = w / tr;
+                            sy = (h - nh) / 2;
+                            h = nh;
+                        }
+                        cv.width = 600;
+                        cv.height = 600 / tr;
+                        cx.fillStyle = "#fff";
+                        cx.fillRect(0, 0, cv.width, cv.height);
+                        cx.drawImage(i, sx, sy, w, h, 0, 0, cv.width, cv.height);
+                    } else {
+                        let md = 1200;
+                        if (w > md || h > md) {
+                            let x = Math.min(md / w, md / h);
+                            w *= x;
+                            h *= x;
+                        }
+                        cv.width = w;
+                        cv.height = h;
+                        cx.fillStyle = "#fff";
+                        cx.fillRect(0, 0, w, h);
+                        cx.drawImage(i, 0, 0, w, h);
+                    }
+                    r(cv.toDataURL('image/jpeg', 1));
+                };
+                i.onerror = j;
+                i.src = e.target.result;
+            };
+            rd.onerror = j;
+            rd.readAsDataURL(f);
+        });
+
+        const upImg = async (inp, k, btn, cvr) => {
+            if (inp.files[0]) {
+                try {
+                    S.imgs[k] = await pImg(inp.files[0], cvr);
+                    btn.classList.remove('hidden');
+                    render();
+                } catch (e) {
+                    alert('Erro.');
+                }
+            }
+        };
+
+        const rmImg = (k, inp, btn) => {
+            S.imgs[k] = null;
+            inp.value = '';
+            btn.classList.add('hidden');
+            render();
+        };
+
+        D.inTop.addEventListener('change', e => upImg(e.target, 'top', D.bRmTop, false));
+        D.inL.addEventListener('change', e => upImg(e.target, 'left', D.bRmL, false));
+        D.inR.addEventListener('change', e => upImg(e.target, 'right', D.bRmR, false));
+
+        D.bRmTop.addEventListener('click', () => rmImg('top', D.inTop, D.bRmTop));
+        D.bRmL.addEventListener('click', () => rmImg('left', D.inL, D.bRmL));
+        D.bRmR.addEventListener('click', () => rmImg('right', D.inR, D.bRmR));
+
+        D.tObs.addEventListener('change', e => {
+            S.obs = e.target.checked;
+            render();
+        });
+
+        D.inBat.addEventListener('change', async e => {
+            let f = Array.from(e.target.files);
+            if (!f.length) return;
+            D.badge.classList.remove('hidden');
+            D.badge.textContent = "Processando...";
+            let warn = false;
+            let ns = [];
+            try {
+                await Promise.all(f.map(async x => {
+                    if (!x.type.startsWith('image/')) return;
+                    let src = await pImg(x, true);
+                    let nm = fmtName(x.name);
+                    if (nm.length > 35) warn = true;
+                    ns.push({ name: nm, src });
+                }));
+                S.studs = [...S.studs, ...ns].sort((a, b) => a.name.localeCompare(b.name));
+                updLote();
+                e.target.value = '';
+                render();
+                if (warn) setTimeout(() => alert("Nomes longos destacados."), 300);
+            } catch (er) {
+                alert("Erro nas fotos.");
+            }
+        });
+
+        const genH = () => {
+            let topHtml = S.imgs.top ? 
+                `<div style="width:100%;height:40mm;margin-bottom:5mm;display:flex;justify-content:center;align-items:center"><img src="${S.imgs.top}" style="max-width:100%;max-height:100%;width:auto;height:auto;display:block" /></div>` : '';
+            
+            let leftHtml = S.imgs.left ? 
+                `<div style="width:35mm;height:35mm;flex-shrink:0;display:flex;justify-content:center;align-items:center;overflow:hidden"><img src="${S.imgs.left}" style="max-width:100%;max-height:100%;width:auto;height:auto;display:block" /></div>` : '';
+                
+            let rightHtml = S.imgs.right ? 
+                `<div style="width:35mm;height:35mm;flex-shrink:0;display:flex;justify-content:center;align-items:center;overflow:hidden"><img src="${S.imgs.right}" style="max-width:100%;max-height:100%;width:auto;height:auto;display:block" /></div>` : '';
+
+            return `
+                <div class="page-header">
+                    ${topHtml}
+                    <div class="header-main">
+                        ${leftHtml}
+                        <div class="header-text-area">
+                            <div style="font-size:13px">${S.txts.l1}</div>
+                            <div style="font-size:13px">${S.txts.l2}</div>
+                            <div style="font-size:12px">${S.txts.l4}</div>
+                            <div style="font-size:11px">${S.txts.l5}</div>
+                            <div style="margin-top:6px;font-weight:bold;background-color:#f3f4f6;border-radius:4px;display:inline-block;width:auto;padding:4px 10px;font-size:12px;text-transform:uppercase">
+                                TURMA ${S.txts.l3 || '-'} | TOTAL DE ALUNOS: ${S.studs.length}
+                            </div>
+                        </div>
+                        ${rightHtml}
+                    </div>
+                </div>
+            `;
+        };
+
+        const genG = (ck, st) => {
+            let h = '<div class="photo-grid">';
+            ck.forEach((s, i) => {
+                let gi = st + i;
+                let sty = s.name.length > 35 ? 'color:#000000' : '';
+                h += `
+                    <div class="student-card">
+                        <div class="student-actions">
+                            <button class="action-btn btn-rename" data-index="${gi}">✏️</button>
+                            <button class="action-btn btn-remove" data-index="${gi}">🗑️</button>
+                        </div>
+                        <div style="width:100%;height:48mm;background:#f3f4f6;border:1px solid #ccc;display:flex;justify-content:center;align-items:center;overflow:hidden">
+                            <img src="${s.src}" style="width:100%;height:100%;display:block" />
+                        </div>
+                        <div class="student-name" style="${sty}">${s.name}</div>
+                    </div>
+                `;
+            });
+            return h + '</div>';
+        };
+
+        const render = () => {
+            let has = S.studs.length > 0 || S.imgs.top || S.imgs.left || S.imgs.right || Object.values(S.txts).some(t => t !== '');
+            D.empty.style.display = has ? 'none' : 'flex';
+            D.root.innerHTML = '';
+            
+            if (!has) return;
+            
+            let ci = 0;
+            let p = 1;
+            let L1 = S.imgs.top ? 15 : 20;
+
+            if (S.studs.length === 0) {
+                D.root.innerHTML = `<div class="a4-page" id="page-${p}">${genH()}<div class="page-footer">${p}</div></div>`;
+                p++;
+            } else {
+                do {
+                    let d = document.createElement('div');
+                    d.className = 'a4-page';
+                    d.id = `page-${p}`;
+                    
+                    if (p === 1) {
+                        d.innerHTML += genH();
+                        let c = S.studs.slice(ci, ci + L1);
+                        if (c.length) d.innerHTML += genG(c, ci);
+                        ci += L1;
+                    } else {
+                        let c = S.studs.slice(ci, ci + LN);
+                        d.innerHTML += genG(c, ci);
+                        ci += LN;
+                    }
+                    
+                    d.innerHTML += `<div class="page-footer">${p}</div>`;
+                    D.root.appendChild(d);
+                    p++;
+                } while (ci < S.studs.length);
+            }
+            
+            if (S.obs) {
+                D.root.innerHTML += `
+                    <div class="a4-page" id="page-obs">
+                        <div style="padding:10mm;display:flex;flex-direction:column;height:100%">
+                            <h2 style="text-align:center;font-family:Arial;font-size:18px;margin-bottom:5mm;font-weight:bold;text-transform:uppercase">Observações</h2>
+                            <textarea style="flex:1;width:100%;border:1px solid #ccc;border-radius:4px;padding:10px;font-family:Arial;font-size:14px;resize:none;outline:none;background-color:#fafafa"></textarea>
+                        </div>
+                        <div class="page-footer">${p}</div>
+                    </div>
+                `;
+            }
+        };
+
+        D.bExp.addEventListener('click', async () => {
+            if (!document.querySelectorAll('.a4-page').length) return;
+            
+            document.body.classList.add('exporting');
+            let ot = D.tExp.textContent;
+            let fn = D.inName.value.replace(/\.pdf$/i, '').trim() || 'fichamento_alunos';
+            
+            D.bExp.disabled = true;
+            D.tExp.innerHTML = '<span class="loader"></span> Gerando...';
+            
+            try {
+                await html2pdf().set({
+                    margin: 0,
+                    filename: fn + '.pdf',
+                    image: { type: 'jpeg', quality: 1 },
+                    html2canvas: { scale: 3, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                }).from(D.root).save();
+            } catch (e) {
+                alert("Erro ao gerar PDF.");
+            } finally {
+                document.body.classList.remove('exporting');
+                D.bExp.disabled = false;
+                D.tExp.textContent = ot;
+            }
+        });
+    </script>
+</body>
+</html>
