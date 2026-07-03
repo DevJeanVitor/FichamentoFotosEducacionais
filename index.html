@@ -317,7 +317,7 @@
 
         const genH = () => {
             let topHtml = S.imgs.top ? 
-                `<div style="width:100%;height:40mm;margin-bottom:5mm;display:flex;justify-content:center;align-items:center"><img src="${S.imgs.top}" style="max-width:100%;max-height:100%;width:auto;height:auto;display:block" /></div>` : '';
+                `<div style="width:100%;height:40mm;margin-bottom:5mm;overflow:hidden;display:flex;justify-content:center;align-items:center"><img src="${S.imgs.top}" style="width:100%;height:100%;object-fit:cover;display:block" /></div>` : '';
             
             let leftHtml = S.imgs.left ? 
                 `<div style="width:35mm;height:35mm;flex-shrink:0;display:flex;justify-content:center;align-items:center;overflow:hidden"><img src="${S.imgs.left}" style="max-width:100%;max-height:100%;width:auto;height:auto;display:block" /></div>` : '';
